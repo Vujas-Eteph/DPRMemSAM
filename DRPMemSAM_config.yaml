@@ -1,0 +1,38 @@
+seed: 0
+
+# SAM2.1 Large Model
+run:
+  sam: "21"
+  size: L
+  sequence: null
+  args:
+    - --no_postprocessing
+
+# Default DAM4SAM memories
+ram:
+  stride: 5 # for VOT
+  num_frames: 2
+
+drm:
+  num_frames: 1
+  iou_min: 0.8
+  size_ratio_tol: 0.2   # 0.2 == accept areas in 0.8 .. 1.2 of the recent median
+  size_window: 300
+  size_recent: 10
+  overlap_max: 0.7
+  min_stride: 1
+
+# Long-term medoid memory
+longterm:
+  enabled: true
+  size: 5
+  iou_min: 0.5 
+  presence_min: 0.8
+  method: online_medoid  
+  descriptor: blend
+  region: fg           # fg (object region)
+  blend_op: product    # product | sum   (only used when descriptor: blend)
+  blend_lambda: 0.5    # weight on the Wasserstein side for blend_op: sum
+  blend_ranknorm: true # rank-normalize each similarity before blending
+  max_pool: 400        # cap on the eligible-pool size kept for the medoid distance (cost guard)
+  init_only_in_longterm: true

@@ -1,0 +1,12 @@
+.vscode/
+.DS_Store
+__pycache__/
+.venv
+*.egg*
+build/*
+_C.*
+outputs/*
+checkpoints/*.pt
+# pixi environments
+.pixi/*
+!.pixi/config.toml

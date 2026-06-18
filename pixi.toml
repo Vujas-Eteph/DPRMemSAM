@@ -1,0 +1,71 @@
+[workspace]
+authors = ["Vujas-Eteph <stephane.vujasinovic@iosb.fraunhofer.de>"]
+channels = ["conda-forge"]
+name = "DRPMemSAM"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[system-requirements]
+cuda = "13"
+
+[dependencies]
+# Python libraries
+python = "3.12.*"
+pip = ">=26.0.1,<27"
+numpy = ">=2.4.3,<3"
+pytorch-gpu = "*"
+zip = ">=3.0,<4"
+fpsample = ">=1.0.2,<2"
+scikit-learn = ">=1.5,<2"
+pillow = ">=12.2.0,<13"
+iopath = ">=0.1.10,<0.2"
+scipy = ">=1.17.1,<2"
+torchvision = ">=0.26.0,<0.27"
+hydra-core = ">=1.3.2,<2"
+omegaconf = ">=2.3.0,<3"
+# Pin to 13.0 to match the CUDA version PyTorch was built against (torch.version.cuda == 13.0).
+# nvcc 13.3 miscompiles PyTorch 2.10's ATen headers -> "need 'typename' ..." in List_inl.h.
+cuda-version = "13.0.*"
+# C/C++ Compilers (Needed to build and compile SAM)
+# more details here : https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794ad901a4/RELEASE_NOTES.md
+gcc_linux-64 = "13.*"          # Host compiler; 13.4 compiles the ATen construct fine on its own (nvcc is the issue, not gcc)
+gxx_linux-64 = "13.*"
+cuda-nvcc = "13.0.*"         # Pinned to 13.0 to match PyTorch's CUDA build; nvcc 13.3 breaks the ATen header compile
+cuda-toolkit = "13.0.*"      # Pinned to 13.0 to match PyTorch's CUDA build
+ninja = ">=1.13.2,<2"
+
+[pypi-dependencies]
+vot-toolkit = ">=0.8.0, <0.9"   # or via pixi add --pypi vot-toolkit
+opencv-python-headless = ">=4.0.0"
+
+
+[tasks.build-sam2]
+description = "Compile and install SAM2."
+# --no-build-isolation: setup.py imports torch at build time. Without this flag,
+# pip builds in an isolated env that lacks torch -> "No module named 'torch'".
+# This reuses the pixi env (which provides torch, setuptools, wheel) for the build.
+cmd = "python -m pip install -v --no-build-isolation -e '.[notebooks]'"
+env = { SAM2_BUILD_ALLOW_ERRORS = "0" }
+
+[tasks.clean-sam2-build]
+description = "Remove existing binaries of pixi.lock and SAM2 CUDA extensions. More help in (https://pixi.prefix.dev/latest/workspace/environment/#cleaning-up)"
+cmd = """
+pixi run pip cache purge ; \
+ccache -C 2>/dev/null || true ; \
+rm -rf build sam2.egg-info sam2/*.so ; \
+rm -rf .pixi pixi.lock
+"""
+
+[tasks.tracker_ls]
+cwd = "workspace"
+cmd = "grep -oP '^\\[\\K[^]]+' trackers.ini"
+description = "List all available trackers defined in trackers.ini"
+
+[tasks.vot_challenge]
+description = "Run a VOT operation. task: test|evaluate|pack. Run 'pixi run trackers' to list available trackers."
+cwd = "workspace"
+args = [
+  { arg = "operation", default = "test" },
+  { arg = "tracker", default = "NCCPython" }
+]
+cmd = "vot {{ operation }} {{ tracker }}"
