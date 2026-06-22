@@ -1,5 +1,7 @@
 # DPRMemSAM
 
+**Official DPRMemSAM Submission for the [VOT Challenge 2026](https://www.votchallenge.net/vots2026/)**
+
 ```latex
 \section{Short Description}
 
