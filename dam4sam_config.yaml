@@ -1,0 +1,94 @@
+seed: 0
+didi_dataset_path: ""
+lasot_dataset_path: ""
+lasot_ext_dataset_path: ""
+got_10k_dataset_path: ""
+box_datasets_gt_masks_path: ""
+lvosv1_dataset_path: "/mnt/drive_7tb/raw_data/LVOSv1"
+
+# Root folder where experiment outputs are written (one self-describing subfolder per run). Used by
+# run_on_lvos.py when --output_dir is not passed; the --output_dir CLI flag still overrides this.
+#output_dir: "grid_search_lvos_results_sequence_size_8"
+output_dir: "grid_search_lvosv1_complete"
+
+# RAM (recent appearance memory) structure, read by CustomDAM4SAMTracker.
+#   stride     = memory_temporal_stride_for_eval (r): keep every r-th past frame in
+#                memory (the model yaml ships 5; the DAM4SAM LVOS setting is 1).
+#   num_frames = num_maskmem: how many memory frames RAM holds (1 current + the rest
+#                past). Must be <= the trained temporal-encoding size (7); larger is
+#                clamped to 7. Omit a key to keep its default.
+ram:
+  stride: 1
+  num_frames: 7
+
+# DRM (distractor-resolving memory) settings, read by CustomDAM4SAMTracker.
+#   num_frames = max_cond_frames_in_attn: how many DRM (conditioning) frames the model
+#                attends to (model yaml ships 4).
+# Add-frame gate (all must hold to add a frame to the DRM): the chosen mask's predicted
+# IoU > iou_min; its area is within (1 +/- size_ratio_tol) of the median of the last
+# `size_recent` non-empty frames (over a `size_window` history); the target is present;
+# frames since the last add > min_stride; AND at least one alternative candidate's bbox
+# IoU with the chosen mask <= overlap_max (a likely distractor). Values below reproduce
+# the baseline; change any to ablate. Omit a key to keep its default; delete the block
+# to fall back to run_on_lvos.py defaults.
+drm:
+  num_frames: 4
+  iou_min: 0.8
+  size_ratio_tol: 0.2   # 0.2 == accept areas in 0.8 .. 1.2 of the recent median
+  size_window: 300
+  size_recent: 10
+  overlap_max: 0.7
+  min_stride: 1
+
+# Long-term medoid memory (optional 3rd bank, ADDITIVE to DRM + RAM), read by
+# CustomDAM4SAMTracker. When enabled, each frame the tracker keeps a causal pool of object
+# pointers from frames passing the IoU + presence gates and selects `size` representatives
+# (medoids on object-pointer cosine distance); the model attends them as extra conditioning
+# memory on top of the default DRM + RAM (so this is purely additive — it does not change the
+# DRM/RAM behaviour). enabled: false ⇒ byte-identical to the baseline. This mirrors the
+# "long-term medoid bank" regime in tools/lvos_memory_span_dashboard.py.
+longterm:
+  enabled: false
+  size: 7              # number of long-term medoid prototypes attended
+  iou_min: 0.0         # only frames with predicted IoU >= this are eligible (0 = no gate)
+  presence_min: 0.0    # only frames with object presence (sigmoid score) >= this (0 = no gate)
+  # Selection objective + strategy (all pin the init):
+  #   online_medoid  = streaming k-medoids — most REPRESENTATIVE frames (causal; viz "online·medoid")
+  #   kmedoids       = batch   k-medoids   — representative (viz "oracle·medoid")
+  #   online_diverse = streaming max-volume — most DIVERSE/spread frames (causal; viz "online·diversity")
+  #   max_volume     = batch greedy max-volume / DPP-MAP — diverse (viz "oracle·diversity")
+  method: online_medoid  # online_medoid | kmedoids | online_diverse | max_volume
+  # Descriptor that drives the medoid DISTANCE (same sources as the visualizer):
+  #   ptr   = object-pointer cosine (256-d; cheapest, always available)
+  #   gauss = masked mask-memory embedding's Gaussian fit, 2-Wasserstein (Bures) distance
+  #   blend = pointer ⊕ Wasserstein combined similarity (product / λ-sum)
+  descriptor: ptr      # ptr | gauss | blend
+  region: fg           # fg (object region) | complete (whole feature map) — for gauss/blend
+  blend_op: product    # product | sum   (only used when descriptor: blend)
+  blend_lambda: 0.5    # weight on the Wasserstein side for blend_op: sum
+  blend_ranknorm: true # rank-normalize each similarity before blending
+  max_pool: 400        # cap on the eligible-pool size kept for the medoid distance (cost guard)
+  # Attend the init frame ONLY via this long-term bank, not as a DRM conditioning frame. The init
+  # stays pinned in the bank (still attended, at the conditioning slot), but it no longer occupies a
+  # DRM slot, so the DRM+RAM budget is purely recent/distractor frames. To make DRM+RAM total 6
+  # instead of 7 (i.e. the init's old slot), also set ram.num_frames: 6 above. Requires enabled: true.
+  init_only_in_longterm: false
+
+# Apple-to-apples baseline for the long-term bank ("extra_memory"). Adds the SAME number of extra
+# spatial-memory frames as `longterm` — attended via the identical shared conditioning-slot injection
+# (so they bypass SAM2's 7-slot temporal-encoding cap, exactly like the long-term bank) — but selected
+# by a DUMB rule instead of the medoid. This isolates "more memory" from "smart medoid selection":
+# set the same total size as a long-term run and compare. Mutually exclusive with `longterm` (it is
+# the baseline), so it only acts when longterm.enabled is false. Off by default => baseline behaviour.
+extra_memory:
+  enabled: false
+  mode: ram            # ram = extended recency (beyond the num_maskmem window; "more RAM")
+                       # drm = the DRM/distractor-gated frames ("more DRM")
+                       # uniform = frames evenly strided over history
+                       # random  = seeded random subset of eligible frames
+  size: 5              # number of extra frames attended at the shared conditioning slot
+  iou_min: 0.0         # same eligibility gates as longterm, so only the SELECTION differs (0 = off)
+  presence_min: 0.0    # min object presence (sigmoid score) to be eligible (0 = off)
+  init_pin: true       # always include the init frame (parallels the long-term init pin)
+  max_pool: 400        # cap on the eligible-pool size (cost guard)
+  seed: 0              # only used by mode: random

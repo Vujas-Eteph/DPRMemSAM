@@ -69,7 +69,6 @@ def main():
         apply_postprocessing="--no_postprocessing" not in run_args,
         drm_config=config.get("drm"),
         longterm_config=config.get("longterm"),
-        extra_memory_config=config.get("extra_memory"),
     )
 
     # Sequential mode: VOT runs this wrapper once per object independently
