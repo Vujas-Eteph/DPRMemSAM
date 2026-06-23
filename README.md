@@ -22,7 +22,7 @@ We compute the global similarity between two object representations by combining
 From this global similarity, DPR selects, through $k$-medoids, the most prototypical (most central) frame of each appearance cluster.
 Since the clusters partition the space, the retained medoids are at once the most prototypical appearance within each cluster and the most diverse across clusters.
 Note that the initialization frame is permanently retained and anchors the clustering.
-Crucially, these two descriptors are condensed summaries, negligible in size next to the full memory-encoder features; hence, we can maintain their representation throughout the sequence without increasing computational cost. They are used exclusively to decide whether the current frame better represents its cluster.
+Crucially, these two descriptors are condensed summaries, negligible in size next to the full memory-encoder features; hence, we can maintain their representation throughout the sequence negligible overhead. They are used exclusively to decide whether the current frame better represents its cluster.
 Essentially, while tracking, DPR replaces a memorized frame representation whenever the current frame's condensed representation is closer to its cluster's optimal center than the one currently stored to represent this cluster.
 Note that a full object representation can only be accessed while the tracker is processing a given frame or has memorized it.
 Thus, each stored frame in DPR is the best accessible proxy for its cluster's center, and not the actual center of the cluster.
